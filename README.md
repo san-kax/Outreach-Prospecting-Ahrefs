@@ -1,4 +1,4 @@
-# Ahrefs Backlink Analyzer App
+# Outreach prospecting Ahrefs App
 
 This Streamlit app fetches, filters, enriches, and flags backlink data using the Ahrefs API.
 
