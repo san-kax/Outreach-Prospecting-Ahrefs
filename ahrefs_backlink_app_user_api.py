@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 
 # === Streamlit UI ===
 st.set_page_config(page_title="Ahrefs Backlink Analyzer", layout="wide")
-st.title("🔗 Ahrefs Backlink Analysis Tool")
+st.title("📬 Outreach Prospecting Tool")
 
 # === Sidebar Inputs ===
 st.sidebar.header("Settings")
