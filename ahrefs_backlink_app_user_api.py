@@ -4,6 +4,9 @@ import requests
 import time
 from io import StringIO
 from urllib.parse import urlparse
+import os
+
+from urllib.parse import urlparse
 
 # === Streamlit UI ===
 st.set_page_config(page_title="Ahrefs Backlink Analyzer", layout="wide")
@@ -13,6 +16,10 @@ st.title("📬 Outreach Prospecting Tool")
 st.sidebar.header("Settings")
 input_file = st.sidebar.file_uploader("Upload Input URLs CSV", type=["csv"])
 gambling_file = st.sidebar.file_uploader("Upload Gambling Domains CSV", type=["csv"])
+
+outreach_file = st.sidebar.file_uploader("Upload Already Outreach CSV", type=["csv"])
+tld_file = st.sidebar.file_uploader("Upload TLD Blocklist (Excel)", type=["xlsx"])
+
 
 api_key = st.sidebar.text_input("Enter your Ahrefs API Key", type="password")
 max_urls = st.sidebar.number_input("Max input URLs to process", min_value=1, max_value=500, value=10)
@@ -152,6 +159,51 @@ if run_button:
             df_merged["Found in Gambling.com"] = df_merged["referring_domain"].isin(gambling_domains)
             df_merged["Found in Gambling.com"] = df_merged["Found in Gambling.com"].apply(lambda x: "TRUE" if x else "FALSE")
             st.success("🏷️ Gambling.com flag added")
+
+        
+        # === Apply Custom Filters ===
+
+        # 1. Remove already outreached domains
+        if outreach_file is not None:
+            df_outreach = pd.read_csv(outreach_file)
+            if "Opportunity" in df_outreach.columns:
+                outreached_domains = df_outreach["Opportunity"].dropna().str.strip().str.lower().unique()
+                df_merged["referring_domain"] = df_merged["referring_domain"].str.lower()
+                df_merged = df_merged[~df_merged["referring_domain"].isin(outreached_domains)]
+                st.success("🚫 Removed already outreached domains")
+            else:
+                st.warning("⚠️ 'Opportunity' column not found in uploaded outreach file.")
+
+        # 2. Remove rejected domains from Google Sheet
+        REJECTED_CSV_URL = "https://docs.google.com/spreadsheets/d/1td29sxdkKAXbzioI6rXxPqUkrFrEnmSH/export?format=csv&gid=1937666042"
+        try:
+            df_rejected = pd.read_csv(REJECTED_CSV_URL)
+            rejected_domains = df_rejected.iloc[:, 0].dropna().str.strip().str.lower().unique()
+            df_merged["referring_domain"] = df_merged["referring_domain"].str.lower()
+            df_merged = df_merged[~df_merged["referring_domain"].isin(rejected_domains)]
+            st.success("❌ Rejected domains from Google Sheet filtered out")
+        except Exception as e:
+            st.warning(f"⚠️ Could not fetch rejected domains from Google Sheet: {e}")
+
+        # 3. Remove blocked TLDs
+        def extract_tld(domain):
+            try:
+                parts = domain.lower().split('.')
+                if len(parts) >= 2:
+                    return '.' + parts[-1]
+                return ''
+            except:
+                return ''
+
+        if tld_file is not None:
+            df_tlds = pd.read_excel(tld_file)
+            blocked_tlds = df_tlds.iloc[:, 0].dropna().str.strip().str.lower().unique()
+            df_merged["referring_domain"] = df_merged["referring_domain"].astype(str)
+            df_merged["tld"] = df_merged["referring_domain"].apply(extract_tld)
+            df_merged = df_merged[~df_merged["tld"].isin(blocked_tlds)]
+            df_merged.drop(columns=["tld"], inplace=True)
+            st.success("🔻 Blocked TLDs filtered out from result")
+
 
         # Output & download
         st.download_button("Download Final CSV", df_merged.to_csv(index=False), file_name="ahrefs_backlinks_flagged.csv", mime="text/csv")
