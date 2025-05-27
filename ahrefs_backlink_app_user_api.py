@@ -25,6 +25,11 @@ api_key = st.sidebar.text_input("Enter your Ahrefs API Key", type="password")
 max_urls = st.sidebar.number_input("Max input URLs to process", min_value=1, max_value=500, value=10)
 limit_backlinks = st.sidebar.number_input("Backlinks per URL (limit)", min_value=1, max_value=1000, value=20)
 run_button = st.sidebar.button("Run Analysis")
+st.sidebar.markdown("---")
+st.sidebar.markdown(
+    "🛑 **[Google Sheet: Rejected Domains](https://docs.google.com/spreadsheets/d/1td29sxdkKAXbzioI6rXxPqUkrFrEnmSH/edit?gid=1937666042#gid=1937666042)**\n"
+    "Add new rejected domains here to keep the filter up to date."
+)
 
 # === Helper Functions ===
 def extract_domain(url):
