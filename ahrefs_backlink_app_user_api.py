@@ -213,3 +213,47 @@ if run_button:
         # Output & download
         st.download_button("Download Final CSV", df_merged.to_csv(index=False), file_name="ahrefs_backlinks_flagged.csv", mime="text/csv")
         st.success("✅ Done! You can download the output above.")
+# === Pitchbox Integration ===
+st.sidebar.header("📤 Pitchbox Upload")
+pb_api_key = st.sidebar.text_input("Pitchbox API Key", type="password")
+pb_campaign_id = st.sidebar.text_input("Pitchbox Campaign ID")
+upload_button = st.sidebar.button("Upload to Pitchbox")
+
+if upload_button:
+    if not pb_api_key or not pb_campaign_id:
+        st.error("⚠️ Please enter both API key and campaign ID.")
+    elif "Found in Gambling.com" not in df_merged.columns:
+        st.error("🔍 Can't find gambling flag. Please ensure you ran the analysis with gambling list.")
+    else:
+        try:
+            # Filter referring domains marked as FALSE in gambling column
+            filtered_domains = df_merged[df_merged["Found in Gambling.com"] == "FALSE"]["referring_domain"].dropna().unique()
+
+            if len(filtered_domains) == 0:
+                st.warning("No domains eligible for Pitchbox upload (all flagged as gambling).")
+            else:
+                st.info(f"Preparing to upload {len(filtered_domains)} domains to Pitchbox...")
+
+                # Format as opportunities
+                opportunities = [{"url": f"https://{domain}", 
+                                  "title": domain, 
+                                  "notes": "Uploaded via Streamlit app", 
+                                  "tags": ["streamlit", "auto-upload"]} for domain in filtered_domains]
+
+                # Authenticate with Pitchbox
+                auth_url = "https://api.pitchbox.com/v2/token"
+                auth_response = requests.post(auth_url, json={"api_key": pb_api_key})
+                if auth_response.status_code != 200:
+                    st.error(f"Authentication failed: {auth_response.text}")
+                else:
+                    jwt = auth_response.json().get("access_token")
+                    headers = {"Authorization": f"Bearer {jwt}", "Content-Type": "application/json"}
+                    upload_url = f"https://api.pitchbox.com/v2/campaigns/{pb_campaign_id}/opportunities"
+                    response = requests.post(upload_url, json={"opportunities": opportunities}, headers=headers)
+
+                    if response.status_code == 200:
+                        st.success(f"✅ Uploaded {len(opportunities)} domains to Pitchbox campaign ID {pb_campaign_id}")
+                    else:
+                        st.error(f"❌ Upload failed: {response.status_code} - {response.text}")
+        except Exception as e:
+            st.exception(f"Unexpected error: {e}")
