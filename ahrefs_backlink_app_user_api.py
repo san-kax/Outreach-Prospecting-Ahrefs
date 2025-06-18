@@ -222,8 +222,10 @@ upload_button = st.sidebar.button("Upload to Pitchbox")
 if upload_button:
     if not pb_api_key or not pb_campaign_id:
         st.error("⚠️ Please enter both API key and campaign ID.")
+    elif 'df_merged' not in locals():
+        st.error("⚠️ You must run the backlink analysis before uploading to Pitchbox.")
     elif "Found in Gambling.com" not in df_merged.columns:
-        st.error("🔍 Can't find gambling flag. Please ensure you ran the analysis with gambling list.")
+        st.error("🔍 Can't find gambling flag. Please ensure you ran the analysis with gambling domain list.")
     else:
         try:
             # Filter referring domains marked as FALSE in gambling column
