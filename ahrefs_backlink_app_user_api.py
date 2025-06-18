@@ -212,9 +212,10 @@ if run_button:
 # Save df_merged to session state for Pitchbox integration
 st.session_state["df_merged"] = df_merged
 
-        # Output & download
-        st.download_button("Download Final CSV", df_merged.to_csv(index=False), file_name="ahrefs_backlinks_flagged.csv", mime="text/csv")
-        st.success("✅ Done! You can download the output above.")
+# Output & download
+st.download_button("Download Final CSV", df_merged.to_csv(index=False), file_name="ahrefs_backlinks_flagged.csv", mime="text/csv")
+st.success("✅ Done! You can download the output above.")
+
 # === Pitchbox Integration ===
 st.sidebar.header("📤 Pitchbox Upload")
 pb_api_key = st.sidebar.text_input("Pitchbox API Key", type="password")
