@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import requests
@@ -5,8 +6,6 @@ import time
 from io import StringIO
 from urllib.parse import urlparse
 import os
-
-from urllib.parse import urlparse
 
 # === Streamlit UI ===
 st.set_page_config(page_title="Ahrefs Backlink Analyzer", layout="wide")
@@ -16,10 +15,8 @@ st.title("📬 Outreach Prospecting Tool")
 st.sidebar.header("Settings")
 input_file = st.sidebar.file_uploader("Upload Input URLs CSV", type=["csv"])
 gambling_file = st.sidebar.file_uploader("Upload Gambling Domains CSV", type=["csv"])
-
 outreach_file = st.sidebar.file_uploader("Upload Already Outreach CSV", type=["csv"])
 tld_file = st.sidebar.file_uploader("Upload TLD Blocklist (Excel)", type=["xlsx"])
-
 
 api_key = st.sidebar.text_input("Enter your Ahrefs API Key", type="password")
 max_urls = st.sidebar.number_input("Max input URLs to process", min_value=1, max_value=500, value=10)
@@ -31,7 +28,6 @@ st.sidebar.markdown(
     "Add new rejected domains here to keep the filter up to date."
 )
 
-# === Helper Functions ===
 def extract_domain(url):
     try:
         return urlparse(url).netloc.lower()
@@ -86,13 +82,11 @@ def parse_batch_results(api_data, input_domains):
             })
     return rows
 
-# === API Field Definitions ===
 SELECT_FIELDS = ",".join([
     "url_from", "anchor", "title", "url_to", "domain_rating_source",
     "traffic_domain", "positions", "is_dofollow", "is_nofollow", "is_content"
 ])
 
-# === Run Analysis ===
 if run_button:
     if not api_key:
         st.error("⚠️ Please enter your Ahrefs API key.")
@@ -119,7 +113,6 @@ if run_button:
         st.success("✅ Backlinks fetched and deduplicated")
         st.dataframe(df_deduped.head())
 
-        # Filter step
         df_filtered = df_deduped[
             (df_deduped["domain_rating_source"] >= 20) &
             (df_deduped["traffic_domain"] >= 300) &
@@ -129,7 +122,6 @@ if run_button:
         st.success("✅ Backlinks filtered")
         st.dataframe(df_filtered.head())
 
-        # Metrics enrichment
         referring_domains = df_filtered["referring_domain"].dropna().unique()
         all_metrics = []
         with st.spinner("📊 Enriching domains with Ahrefs metrics..."):
@@ -144,7 +136,6 @@ if run_button:
         df_filtered["referring_domain"] = df_filtered["referring_domain"].astype(str).str.strip().str.rstrip("/")
         df_merged = df_filtered.merge(df_metrics, on="referring_domain", how="left")
 
-        # Fix column type for display
         cols_to_fix = [
             "Domain Rating", "URL Rating", "Org Keywords",
             "Org Keywords 1-3", "Org Keywords 4-10", "Org Traffic Top By Country"
@@ -156,7 +147,6 @@ if run_button:
         st.success("✅ Metrics added")
         st.dataframe(df_merged.head())
 
-        # Flag gambling domains (optional)
         if gambling_file is not None:
             df_compare = pd.read_csv(gambling_file)
             gambling_domains = df_compare.iloc[:, 0].dropna().str.strip().str.lower().unique()
@@ -165,10 +155,6 @@ if run_button:
             df_merged["Found in Gambling.com"] = df_merged["Found in Gambling.com"].apply(lambda x: "TRUE" if x else "FALSE")
             st.success("🏷️ Gambling.com flag added")
 
-        
-        # === Apply Custom Filters ===
-
-        # 1. Remove already outreached domains
         if outreach_file is not None:
             df_outreach = pd.read_csv(outreach_file)
             if "Opportunity" in df_outreach.columns:
@@ -179,7 +165,6 @@ if run_button:
             else:
                 st.warning("⚠️ 'Opportunity' column not found in uploaded outreach file.")
 
-        # 2. Remove rejected domains from Google Sheet
         REJECTED_CSV_URL = "https://docs.google.com/spreadsheets/d/1td29sxdkKAXbzioI6rXxPqUkrFrEnmSH/export?format=csv&gid=1937666042"
         try:
             df_rejected = pd.read_csv(REJECTED_CSV_URL)
@@ -190,7 +175,6 @@ if run_button:
         except Exception as e:
             st.warning(f"⚠️ Could not fetch rejected domains from Google Sheet: {e}")
 
-        # 3. Remove blocked TLDs
         def extract_tld(domain):
             try:
                 parts = domain.lower().split('.')
@@ -209,12 +193,9 @@ if run_button:
             df_merged.drop(columns=["tld"], inplace=True)
             st.success("🔻 Blocked TLDs filtered out from result")
 
-# Save df_merged to session state for Pitchbox integration
-st.session_state["df_merged"] = df_merged
-
-# Output & download
-st.download_button("Download Final CSV", df_merged.to_csv(index=False), file_name="ahrefs_backlinks_flagged.csv", mime="text/csv")
-st.success("✅ Done! You can download the output above.")
+        st.session_state["df_merged"] = df_merged
+        st.download_button("Download Final CSV", df_merged.to_csv(index=False), file_name="ahrefs_backlinks_flagged.csv", mime="text/csv")
+        st.success("✅ Done! You can download the output above.")
 
 # === Pitchbox Integration ===
 st.sidebar.header("📤 Pitchbox Upload")
@@ -232,8 +213,6 @@ if upload_button:
     else:
         try:
             df_merged = st.session_state["df_merged"]
-
-            # Filter referring domains marked as FALSE in gambling column
             filtered_domains = df_merged[df_merged["Found in Gambling.com"] == "FALSE"]["referring_domain"].dropna().unique()
 
             if len(filtered_domains) == 0:
@@ -241,7 +220,6 @@ if upload_button:
             else:
                 st.info(f"Preparing to upload {len(filtered_domains)} domains to Pitchbox...")
 
-                # Format as opportunities
                 opportunities = [
                     {
                         "url": f"https://{domain}",
@@ -251,7 +229,6 @@ if upload_button:
                     } for domain in filtered_domains
                 ]
 
-                # Authenticate with Pitchbox
                 auth_url = "https://api.pitchbox.com/v2/token"
                 auth_response = requests.post(auth_url, json={"api_key": pb_api_key})
                 if auth_response.status_code != 200:
