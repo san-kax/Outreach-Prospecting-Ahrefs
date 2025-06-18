@@ -209,6 +209,8 @@ if run_button:
             df_merged.drop(columns=["tld"], inplace=True)
             st.success("🔻 Blocked TLDs filtered out from result")
 
+# Save df_merged to session state for Pitchbox integration
+st.session_state["df_merged"] = df_merged
 
         # Output & download
         st.download_button("Download Final CSV", df_merged.to_csv(index=False), file_name="ahrefs_backlinks_flagged.csv", mime="text/csv")
@@ -222,12 +224,14 @@ upload_button = st.sidebar.button("Upload to Pitchbox")
 if upload_button:
     if not pb_api_key or not pb_campaign_id:
         st.error("⚠️ Please enter both API key and campaign ID.")
-    elif 'df_merged' not in locals():
+    elif "df_merged" not in st.session_state:
         st.error("⚠️ You must run the backlink analysis before uploading to Pitchbox.")
-    elif "Found in Gambling.com" not in df_merged.columns:
+    elif "Found in Gambling.com" not in st.session_state["df_merged"].columns:
         st.error("🔍 Can't find gambling flag. Please ensure you ran the analysis with gambling domain list.")
     else:
         try:
+            df_merged = st.session_state["df_merged"]
+
             # Filter referring domains marked as FALSE in gambling column
             filtered_domains = df_merged[df_merged["Found in Gambling.com"] == "FALSE"]["referring_domain"].dropna().unique()
 
@@ -237,16 +241,20 @@ if upload_button:
                 st.info(f"Preparing to upload {len(filtered_domains)} domains to Pitchbox...")
 
                 # Format as opportunities
-                opportunities = [{"url": f"https://{domain}", 
-                                  "title": domain, 
-                                  "notes": "Uploaded via Streamlit app", 
-                                  "tags": ["streamlit", "auto-upload"]} for domain in filtered_domains]
+                opportunities = [
+                    {
+                        "url": f"https://{domain}",
+                        "title": domain,
+                        "notes": "Uploaded via Streamlit app",
+                        "tags": ["streamlit", "auto-upload"]
+                    } for domain in filtered_domains
+                ]
 
                 # Authenticate with Pitchbox
                 auth_url = "https://api.pitchbox.com/v2/token"
                 auth_response = requests.post(auth_url, json={"api_key": pb_api_key})
                 if auth_response.status_code != 200:
-                    st.error(f"Authentication failed: {auth_response.text}")
+                    st.error(f"❌ Authentication failed: {auth_response.text}")
                 else:
                     jwt = auth_response.json().get("access_token")
                     headers = {"Authorization": f"Bearer {jwt}", "Content-Type": "application/json"}
