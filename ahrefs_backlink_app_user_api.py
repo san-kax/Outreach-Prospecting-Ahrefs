@@ -220,6 +220,7 @@ if upload_button:
             else:
                 st.info(f"Preparing to upload {len(filtered_domains)} domains to Pitchbox...")
 
+                # Format as opportunities
                 opportunities = [
                     {
                         "url": f"https://{domain}",
@@ -229,15 +230,26 @@ if upload_button:
                     } for domain in filtered_domains
                 ]
 
+                # Step 1: Authenticate and get token
                 auth_url = "https://api.pitchbox.com/v2/token"
                 auth_response = requests.post(auth_url, json={"api_key": pb_api_key})
                 if auth_response.status_code != 200:
                     st.error(f"❌ Authentication failed: {auth_response.text}")
                 else:
                     jwt = auth_response.json().get("access_token")
-                    headers = {"Authorization": f"Bearer {jwt}", "Content-Type": "application/json"}
-                    upload_url = f"https://api.pitchbox.com/v2/campaigns/{pb_campaign_id}/opportunities"
-                    response = requests.post(upload_url, json={"opportunities": opportunities}, headers=headers)
+                    headers = {
+                        "Authorization": f"Bearer {jwt}",
+                        "Content-Type": "application/json"
+                    }
+
+                    # Step 2: Correct upload endpoint and payload
+                    upload_url = "https://api.pitchbox.com/api/campaigns/import"
+                    payload = {
+                        "campaign_id": pb_campaign_id,
+                        "opportunities": opportunities
+                    }
+
+                    response = requests.post(upload_url, json=payload, headers=headers)
 
                     if response.status_code == 200:
                         st.success(f"✅ Uploaded {len(opportunities)} domains to Pitchbox campaign ID {pb_campaign_id}")
