@@ -198,7 +198,7 @@ if run_button:
         st.success("✅ Done! You can download the output above.")
 
 # === Pitchbox Integration ===
-st.sidebar.header("📤 Pitchbox Upload")
+st.sidebar.header("📤 Pitchbox Upload (One-by-One)")
 pb_api_key = st.sidebar.text_input("Pitchbox API Key", type="password")
 pb_campaign_id = st.sidebar.text_input("Pitchbox Campaign ID")
 upload_button = st.sidebar.button("Upload to Pitchbox")
@@ -220,16 +220,6 @@ if upload_button:
             else:
                 st.info(f"Preparing to upload {len(filtered_domains)} domains to Pitchbox...")
 
-                # Format as opportunities
-                opportunities = [
-                    {
-                        "url": f"https://{domain}",
-                        "title": domain,
-                        "notes": "Uploaded via Streamlit app",
-                        "tags": ["streamlit", "auto-upload"]
-                    } for domain in filtered_domains
-                ]
-
                 # Step 1: Authenticate and get token
                 auth_url = "https://api.pitchbox.com/v2/token"
                 auth_response = requests.post(auth_url, json={"api_key": pb_api_key})
@@ -242,18 +232,35 @@ if upload_button:
                         "Content-Type": "application/json"
                     }
 
-                    # Step 2: Correct upload endpoint and payload
-                    upload_url = "https://api.pitchbox.com/api/campaigns/import"
-                    payload = {
-                        "campaign_id": pb_campaign_id,
-                        "opportunities": opportunities
-                    }
+                    # Step 2: Loop through each domain and POST individually
+                    progress = st.progress(0)
+                    success_count = 0
+                    failure_log = []
 
-                    response = requests.post(upload_url, json=payload, headers=headers)
+                    for i, domain in enumerate(filtered_domains):
+                        payload = {
+                            "url": f"https://{domain}",
+                            "campaign": int(pb_campaign_id),
+                            "contacts": [],
+                            "personalization": {}
+                        }
 
-                    if response.status_code == 200:
-                        st.success(f"✅ Uploaded {len(opportunities)} domains to Pitchbox campaign ID {pb_campaign_id}")
-                    else:
-                        st.error(f"❌ Upload failed: {response.status_code} - {response.text}")
+                        response = requests.post("https://api.pitchbox.com/api/opportunities", json=payload, headers=headers)
+
+                        if response.status_code == 200:
+                            success_count += 1
+                            st.write(f"✅ Added: {domain}")
+                        else:
+                            failure_log.append((domain, response.status_code, response.text))
+                            st.error(f"❌ Failed: {domain} — {response.status_code} - {response.text}")
+
+                        progress.progress((i + 1) / len(filtered_domains))
+
+                    # Final summary
+                    st.success(f"Upload complete: {success_count} succeeded, {len(failure_log)} failed.")
+                    if failure_log:
+                        with st.expander("View Failed Uploads"):
+                            for domain, code, msg in failure_log:
+                                st.text(f"{domain} → {code}: {msg}")
         except Exception as e:
             st.exception(f"Unexpected error: {e}")
