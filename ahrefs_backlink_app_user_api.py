@@ -157,13 +157,13 @@ if run_button:
 
         if outreach_file is not None:
             df_outreach = pd.read_csv(outreach_file)
-            if "Opportunity" in df_outreach.columns:
-                outreached_domains = df_outreach["Opportunity"].dropna().str.strip().str.lower().unique()
+            if "opportunity" in df_outreach.columns:
+                outreached_domains = df_outreach["opportunity"].dropna().str.strip().str.lower().unique()
                 df_merged["referring_domain"] = df_merged["referring_domain"].str.lower()
                 df_merged = df_merged[~df_merged["referring_domain"].isin(outreached_domains)]
                 st.success("🚫 Removed already outreached domains")
             else:
-                st.warning("⚠️ 'Opportunity' column not found in uploaded outreach file.")
+                st.warning("⚠️ 'opportunity' column not found in uploaded outreach file.")
 
         REJECTED_CSV_URL = "https://docs.google.com/spreadsheets/d/1td29sxdkKAXbzioI6rXxPqUkrFrEnmSH/export?format=csv&gid=1937666042"
         try:
