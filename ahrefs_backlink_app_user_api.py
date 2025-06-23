@@ -221,7 +221,7 @@ if upload_button:
                 st.info(f"Preparing to upload {len(filtered_domains)} domains to Pitchbox...")
 
                 # Step 1: Authenticate and get token
-                auth_url = "https://apiv2.pitchbox.com/docs#section/Authentication/JWT"
+                auth_url = "https://api.pitchbox.com/v2/token"
                 auth_response = requests.post(auth_url, json={"api_key": pb_api_key})
                 if auth_response.status_code != 200:
                     st.error(f"❌ Authentication failed: {auth_response.text}")
