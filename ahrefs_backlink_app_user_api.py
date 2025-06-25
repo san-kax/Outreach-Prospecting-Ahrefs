@@ -197,15 +197,15 @@ if run_button:
         st.download_button("Download Final CSV", df_merged.to_csv(index=False), file_name="ahrefs_backlinks_flagged.csv", mime="text/csv")
         st.success("✅ Done! You can download the output above.")
 
-# === Pitchbox Integration ===
+# === Pitchbox Integration (One-by-One with JWT) ===
 st.sidebar.header("📤 Pitchbox Upload (One-by-One)")
-pb_api_key = st.sidebar.text_input("Pitchbox API Key", type="password")
+pb_api_key = st.sidebar.text_input("Pitchbox API JWT", type="password")  # Now treated as JWT token
 pb_campaign_id = st.sidebar.text_input("Pitchbox Campaign ID")
 upload_button = st.sidebar.button("Upload to Pitchbox")
 
 if upload_button:
     if not pb_api_key or not pb_campaign_id:
-        st.error("⚠️ Please enter both API key and campaign ID.")
+        st.error("⚠️ Please enter both API key (JWT) and campaign ID.")
     elif "df_merged" not in st.session_state:
         st.error("⚠️ You must run the backlink analysis before uploading to Pitchbox.")
     elif "Found in Gambling.com" not in st.session_state["df_merged"].columns:
@@ -220,47 +220,39 @@ if upload_button:
             else:
                 st.info(f"Preparing to upload {len(filtered_domains)} domains to Pitchbox...")
 
-                # Step 1: Authenticate and get token
-                auth_url = "https://api.pitchbox.com/v2/token"
-                auth_response = requests.post(auth_url, json={"api_key": pb_api_key})
-                if auth_response.status_code != 200:
-                    st.error(f"❌ Authentication failed: {auth_response.text}")
-                else:
-                    jwt = auth_response.json().get("access_token")
-                    headers = {
-                        "Authorization": f"Bearer {jwt}",
-                        "Content-Type": "application/json"
+                headers = {
+                    "Authorization": f"Bearer {pb_api_key}",
+                    "Content-Type": "application/json"
+                }
+
+                progress = st.progress(0)
+                success_count = 0
+                failure_log = []
+
+                for i, domain in enumerate(filtered_domains):
+                    payload = {
+                        "url": f"https://{domain}",
+                        "campaign": int(pb_campaign_id),
+                        "contacts": [],
+                        "personalization": {}
                     }
 
-                    # Step 2: Loop through each domain and POST individually
-                    progress = st.progress(0)
-                    success_count = 0
-                    failure_log = []
+                    response = requests.post("https://apiv2.pitchbox.com/api/opportunities", json=payload, headers=headers)
 
-                    for i, domain in enumerate(filtered_domains):
-                        payload = {
-                            "url": f"https://{domain}",
-                            "campaign": int(pb_campaign_id),
-                            "contacts": [],
-                            "personalization": {}
-                        }
+                    if response.status_code == 200:
+                        success_count += 1
+                        st.write(f"✅ Added: {domain}")
+                    else:
+                        failure_log.append((domain, response.status_code, response.text))
+                        st.error(f"❌ Failed: {domain} — {response.status_code} - {response.text}")
 
-                        response = requests.post("https://api.pitchbox.com/api/opportunities", json=payload, headers=headers)
+                    progress.progress((i + 1) / len(filtered_domains))
 
-                        if response.status_code == 200:
-                            success_count += 1
-                            st.write(f"✅ Added: {domain}")
-                        else:
-                            failure_log.append((domain, response.status_code, response.text))
-                            st.error(f"❌ Failed: {domain} — {response.status_code} - {response.text}")
-
-                        progress.progress((i + 1) / len(filtered_domains))
-
-                    # Final summary
-                    st.success(f"Upload complete: {success_count} succeeded, {len(failure_log)} failed.")
-                    if failure_log:
-                        with st.expander("View Failed Uploads"):
-                            for domain, code, msg in failure_log:
-                                st.text(f"{domain} → {code}: {msg}")
+                # Final summary
+                st.success(f"Upload complete: {success_count} succeeded, {len(failure_log)} failed.")
+                if failure_log:
+                    with st.expander("View Failed Uploads"):
+                        for domain, code, msg in failure_log:
+                            st.text(f"{domain} → {code}: {msg}")
         except Exception as e:
             st.exception(f"Unexpected error: {e}")
