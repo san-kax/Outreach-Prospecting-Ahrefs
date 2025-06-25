@@ -197,9 +197,9 @@ if run_button:
         st.download_button("Download Final CSV", df_merged.to_csv(index=False), file_name="ahrefs_backlinks_flagged.csv", mime="text/csv")
         st.success("✅ Done! You can download the output above.")
 
-# === Pitchbox Integration (One-by-One with JWT) ===
-st.sidebar.header("📤 Pitchbox Upload (One-by-One)")
-pb_api_key = st.sidebar.text_input("Pitchbox API JWT", type="password")  # Now treated as JWT token
+# === Pitchbox Integration (Bulk Upload with JWT) ===
+st.sidebar.header("📤 Pitchbox Upload (Bulk)")
+pb_api_key = st.sidebar.text_input("Pitchbox API JWT", type="password")
 pb_campaign_id = st.sidebar.text_input("Pitchbox Campaign ID")
 upload_button = st.sidebar.button("Upload to Pitchbox")
 
@@ -220,39 +220,31 @@ if upload_button:
             else:
                 st.info(f"Preparing to upload {len(filtered_domains)} domains to Pitchbox...")
 
+                # Build bulk payload
+                payload = [
+                    {
+                        "url": f"https://{domain}",
+                        "campaign": int(pb_campaign_id),
+                        "contacts": []
+                    }
+                    for domain in filtered_domains
+                ]
+
                 headers = {
                     "Authorization": f"Bearer {pb_api_key}",
                     "Content-Type": "application/json"
                 }
 
-                progress = st.progress(0)
-                success_count = 0
-                failure_log = []
+                # Make the bulk request
+                response = requests.post("https://apiv2.pitchbox.com/api/opportunities", json=payload, headers=headers)
 
-                for i, domain in enumerate(filtered_domains):
-                    payload = {
-                        "url": f"https://{domain}",
-                        "campaign": int(pb_campaign_id),
-                        "contacts": [],
-                        "personalization": {}
-                    }
+                # Handle result
+                if response.status_code == 200:
+                    st.success("✅ Bulk upload completed successfully!")
+                    st.json(response.json())
+                else:
+                    st.error(f"❌ Upload failed — {response.status_code}")
+                    st.text(response.text)
 
-                    response = requests.post("https://apiv2.pitchbox.com/api/opportunities", json=payload, headers=headers)
-
-                    if response.status_code == 200:
-                        success_count += 1
-                        st.write(f"✅ Added: {domain}")
-                    else:
-                        failure_log.append((domain, response.status_code, response.text))
-                        st.error(f"❌ Failed: {domain} — {response.status_code} - {response.text}")
-
-                    progress.progress((i + 1) / len(filtered_domains))
-
-                # Final summary
-                st.success(f"Upload complete: {success_count} succeeded, {len(failure_log)} failed.")
-                if failure_log:
-                    with st.expander("View Failed Uploads"):
-                        for domain, code, msg in failure_log:
-                            st.text(f"{domain} → {code}: {msg}")
         except Exception as e:
             st.exception(f"Unexpected error: {e}")
