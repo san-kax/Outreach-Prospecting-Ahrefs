@@ -96,7 +96,7 @@ if run_button:
 
     if input_file is not None:
         df_input = pd.read_csv(input_file)
-        target_urls = df_input.iloc[:, 4].dropna().unique()[:max_urls]
+        target_urls = df_input.iloc[:, 1].dropna().unique()[:max_urls]
 
         all_backlinks = []
         with st.spinner("🔍 Fetching backlinks..."):
