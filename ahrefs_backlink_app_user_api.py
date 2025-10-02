@@ -237,17 +237,31 @@ if use_airtable:
     }
 
     st.sidebar.markdown("**Existing domains — select Airtable sources to check & EXCLUDE**")
-    selected_existing_labels = st.sidebar.multiselect(
-        "Select additional Airtable sources to check for existing domains",
-        options=list(EXISTING_PRESETS.keys()),
-        default=[
-            "Prospect-Data (appHdhjsWVRxaCvcR)",
-            "GDC-Database (appUoOvkqzJvyyMvC)",
-            "WB-Database (appueIgn44RaVH6ot)",
-            "Freebets-Database (appFBasaCUkEKtvpV)",
-        ],
-    )
-    selected_existing_cfg = [EXISTING_PRESETS[l] for l in selected_existing_labels]
+
+# Checkbox dropdown helper (uses popover if available, otherwise an expander)
+def checkbox_list_dropdown(label: str, options: list[str], default: list[str]) -> list[str]:
+    selected: list[str] = []
+    has_popover = hasattr(st.sidebar, "popover")
+    container = st.sidebar.popover(label) if has_popover else st.sidebar.expander(label, expanded=False)
+    with container:
+        select_all = st.checkbox("Select all", value=len(default) == len(options), key=f"{label}_all")
+        base_set = set(options) if select_all else set(default)
+        for i, opt in enumerate(options):
+            checked = st.checkbox(opt, value=(opt in base_set), key=f"{label}_{i}")
+            if checked:
+                selected.append(opt)
+    return selected
+
+existing_options = list(EXISTING_PRESETS.keys())
+default_existing = [
+    "Prospect-Data (appHdhjsWVRxaCvcR)",
+    "GDC-Database (appUoOvkqzJvyyMvC)",
+    "WB-Database (appueIgn44RaVH6ot)",
+    "Freebets-Database (appFBasaCUkEKtvpV)",
+]
+
+selected_existing_labels = checkbox_list_dropdown("Select sources", existing_options, default_existing)
+selected_existing_cfg = [EXISTING_PRESETS[l] for l in selected_existing_labels]
 
     st.sidebar.markdown("---")
     st.sidebar.markdown("**Brand/Gambling flag source**")
