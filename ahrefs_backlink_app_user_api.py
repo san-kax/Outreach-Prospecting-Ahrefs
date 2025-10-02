@@ -182,7 +182,7 @@ def airtable_lookup_by_values(base_id: str, table_name: str, field_name: str, va
     headers = {"Authorization": f"Bearer {api_key}"}
 
     def esc(s: str) -> str:
-        return s.replace("'", "\'")
+        return s.replace("'", "\\'")
 
     out = []
     values = [v for v in values if v]
@@ -203,6 +203,30 @@ def airtable_lookup_by_values(base_id: str, table_name: str, field_name: str, va
                 break
             params["offset"] = offset
     return airtable_column_to_series(out, field_name)
+
+# ---- UI helper (keeps indentation simple and safe)
+def render_existing_sources_ui(EXISTING_PRESETS: dict):
+    st.sidebar.markdown("**Existing domains — select Airtable sources to check & EXCLUDE**")
+    existing_options = list(EXISTING_PRESETS.keys())
+    default_existing = [
+        "Prospect-Data (appHdhjsWVRxaCvcR)",
+        "GDC-Database (appUoOvkqzJvyyMvC)",
+        "WB-Database (appueIgn44RaVH6ot)",
+        "Freebets-Database (appFBasaCUkEKtvpV)",
+    ]
+    default_existing = [o for o in default_existing if o in existing_options]
+
+    selected_labels = []
+    with st.sidebar.expander("Select sources", expanded=False):
+        select_all = st.checkbox("Select all", value=True, key="existing_all")
+        base_defaults = set(default_existing)
+        for i, opt in enumerate(existing_options):
+            default_val = True if select_all else (opt in base_defaults)
+            if st.checkbox(opt, value=default_val, key=f"existing_{i}"):
+                selected_labels.append(opt)
+
+    selected_cfg = [EXISTING_PRESETS[l] for l in selected_labels]
+    return selected_cfg, selected_labels
 
 # ==========================
 # Sidebar — Inputs
@@ -236,27 +260,8 @@ if use_airtable:
         "Freebets-Database (appFBasaCUkEKtvpV)": ("appFBasaCUkEKtvpV", "tblmTREzfIswOuA0F", "Domain"),
     }
 
-        st.sidebar.markdown("**Existing domains — select Airtable sources to check & EXCLUDE**")
-
-    existing_options = list(EXISTING_PRESETS.keys())
-    default_existing = [
-        "Prospect-Data (appHdhjsWVRxaCvcR)",
-        "GDC-Database (appUoOvkqzJvyyMvC)",
-        "WB-Database (appueIgn44RaVH6ot)",
-        "Freebets-Database (appFBasaCUkEKtvpV)",
-    ]
-
-    # Checkbox dropdown: simple expander with proper indentation inside the sidebar block
-    selected_existing_labels = []
-    with st.sidebar.expander("Select sources", expanded=False):
-        select_all = st.checkbox("Select all", value=True, key="existing_all")
-        base_defaults = set(default_existing)
-        for i, opt in enumerate(existing_options):
-            default_val = True if select_all else (opt in base_defaults)
-            if st.checkbox(opt, value=default_val, key=f"existing_{i}"):
-                selected_existing_labels.append(opt)
-
-    selected_existing_cfg = [EXISTING_PRESETS[l] for l in selected_existing_labels]
+    # Checkbox dropdown (safe helper)
+    selected_existing_cfg, selected_existing_labels = render_existing_sources_ui(EXISTING_PRESETS)
 
     st.sidebar.markdown("---")
     st.sidebar.markdown("**Brand/Gambling flag source**")
@@ -281,7 +286,11 @@ if use_airtable:
     blocklist_cfg = [("appJTJQwjHRaAyLkw", "tbliCOQZY9RICLsLP", "Disavow-Domains")] if enable_blocklist else []
 
     # Speed mode for Airtable lookups
-    fast_match = st.sidebar.checkbox("Fast Airtable matching (query only candidates)", value=True, help="Avoids downloading entire tables by using filterByFormula to match only your candidate domains.")
+    fast_match = st.sidebar.checkbox(
+        "Fast Airtable matching (query only candidates)",
+        value=True,
+        help="Avoids downloading entire tables by using filterByFormula to match only your candidate domains."
+    )
 
     with st.sidebar.expander("Advanced: add custom tables (baseId,tableIdOrName,fieldName)"):
         st.caption("One per line. Examples are prefilled above; this lets power users add more without code changes.")
@@ -441,7 +450,7 @@ if run_button:
                 brand_series = airtable_column_to_series(brand_records, brand_flag_cfg[0][2]) if brand_flag_cfg else pd.Series([], dtype="string")
             brand_domains = set(brand_series.map(to_domain_only).dropna().unique())
 
-            # Rejected & Blocklist (these are small; fetch-all is fine, but also support fast mode)
+            # Rejected & Blocklist
             def gather(cfgs):
                 if not cfgs:
                     return set()
