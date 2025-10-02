@@ -238,20 +238,6 @@ if use_airtable:
 
     st.sidebar.markdown("**Existing domains — select Airtable sources to check & EXCLUDE**")
 
-# Checkbox dropdown helper (uses popover if available, otherwise an expander)
-def checkbox_list_dropdown(label: str, options: list[str], default: list[str]) -> list[str]:
-    selected: list[str] = []
-    has_popover = hasattr(st.sidebar, "popover")
-    container = st.sidebar.popover(label) if has_popover else st.sidebar.expander(label, expanded=False)
-    with container:
-        select_all = st.checkbox("Select all", value=len(default) == len(options), key=f"{label}_all")
-        base_set = set(options) if select_all else set(default)
-        for i, opt in enumerate(options):
-            checked = st.checkbox(opt, value=(opt in base_set), key=f"{label}_{i}")
-            if checked:
-                selected.append(opt)
-    return selected
-
 existing_options = list(EXISTING_PRESETS.keys())
 default_existing = [
     "Prospect-Data (appHdhjsWVRxaCvcR)",
@@ -260,7 +246,16 @@ default_existing = [
     "Freebets-Database (appFBasaCUkEKtvpV)",
 ]
 
-selected_existing_labels = checkbox_list_dropdown("Select sources", existing_options, default_existing)
+# Checkbox dropdown: simple expander to avoid indentation issues
+selected_existing_labels = []
+with st.sidebar.expander("Select sources", expanded=False):
+    select_all = st.checkbox("Select all", value=True, key="existing_all")
+    base_defaults = set(default_existing)
+    for i, opt in enumerate(existing_options):
+        default_val = True if select_all else (opt in base_defaults)
+        if st.checkbox(opt, value=default_val, key=f"existing_{i}"):
+            selected_existing_labels.append(opt)
+
 selected_existing_cfg = [EXISTING_PRESETS[l] for l in selected_existing_labels]
 
     st.sidebar.markdown("---")
