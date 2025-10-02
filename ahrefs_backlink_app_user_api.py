@@ -108,6 +108,9 @@ def parse_batch_results(api_data, input_domains):
 @st.cache_data(show_spinner=False)
 def airtable_fetch_all(base_id: str, table_name: str, api_key: str, view: str | None = None, fields: list[str] | None = None) -> list[dict]:
     """Fetch all rows from an Airtable table (REST API), handling pagination."""
+    api_key = (api_key or "").strip()
+    if not api_key:
+        raise RuntimeError("Airtable: empty API key")
     url = f"https://api.airtable.com/v0/{base_id}/{requests.utils.quote(table_name)}"
     headers = {"Authorization": f"Bearer {api_key}"}
     params = {}
@@ -119,6 +122,8 @@ def airtable_fetch_all(base_id: str, table_name: str, api_key: str, view: str | 
     out = []
     while True:
         r = requests.get(url, headers=headers, params=params)
+        if r.status_code == 401:
+            raise RuntimeError("Airtable 401 AUTHENTICATION_REQUIRED — check that you pasted the *token VALUE* (begins with 'pat...'), not the Token ID, and that it has data.records:read access to this base.")
         if r.status_code != 200:
             raise RuntimeError(f"Airtable error {r.status_code}: {r.text}")
         data = r.json()
@@ -127,7 +132,7 @@ def airtable_fetch_all(base_id: str, table_name: str, api_key: str, view: str | 
         if not offset:
             break
         params["offset"] = offset
-        time.sleep(0.22)  # be nice to rate limits
+        time.sleep(0.22)
     return out
 
 @st.cache_data(show_spinner=False)
@@ -259,7 +264,23 @@ else:
     st.sidebar.markdown("---")
     st.sidebar.markdown("🛑 If not using Airtable, keep the Google Sheet/CSV uploads here.")
 
+test_btn = st.sidebar.button("Test Airtable connection")
 run_button = st.sidebar.button("Run Analysis")
+
+if use_airtable and test_btn:
+    try:
+        api_key = at_api_key.strip()
+        r = requests.get("https://api.airtable.com/v0/meta/bases", headers={"Authorization": f"Bearer {api_key}"})
+        if r.status_code == 200:
+            bases = r.json().get("bases", [])
+            base_ids = [b.get("id") for b in bases]
+            st.success(f"Token OK. Accessible bases: {', '.join(base_ids) or 'none'}")
+        elif r.status_code == 401:
+            st.error("401 AUTHENTICATION_REQUIRED: paste the *token VALUE* (starts with 'pat') not the short Token ID. Also ensure the token has data.records:read and access to the selected bases.")
+        else:
+            st.error(f"Unexpected response {r.status_code}: {r.text}")
+    except Exception as e:
+        st.error(f"Connection test failed: {e}")
 
 # ==========================
 # Core Flow
