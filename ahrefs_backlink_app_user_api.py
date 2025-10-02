@@ -236,27 +236,27 @@ if use_airtable:
         "Freebets-Database (appFBasaCUkEKtvpV)": ("appFBasaCUkEKtvpV", "tblmTREzfIswOuA0F", "Domain"),
     }
 
-    st.sidebar.markdown("**Existing domains — select Airtable sources to check & EXCLUDE**")
+        st.sidebar.markdown("**Existing domains — select Airtable sources to check & EXCLUDE**")
 
-existing_options = list(EXISTING_PRESETS.keys())
-default_existing = [
-    "Prospect-Data (appHdhjsWVRxaCvcR)",
-    "GDC-Database (appUoOvkqzJvyyMvC)",
-    "WB-Database (appueIgn44RaVH6ot)",
-    "Freebets-Database (appFBasaCUkEKtvpV)",
-]
+    existing_options = list(EXISTING_PRESETS.keys())
+    default_existing = [
+        "Prospect-Data (appHdhjsWVRxaCvcR)",
+        "GDC-Database (appUoOvkqzJvyyMvC)",
+        "WB-Database (appueIgn44RaVH6ot)",
+        "Freebets-Database (appFBasaCUkEKtvpV)",
+    ]
 
-# Checkbox dropdown: simple expander to avoid indentation issues
-selected_existing_labels = []
-with st.sidebar.expander("Select sources", expanded=False):
-    select_all = st.checkbox("Select all", value=True, key="existing_all")
-    base_defaults = set(default_existing)
-    for i, opt in enumerate(existing_options):
-        default_val = True if select_all else (opt in base_defaults)
-        if st.checkbox(opt, value=default_val, key=f"existing_{i}"):
-            selected_existing_labels.append(opt)
+    # Checkbox dropdown: simple expander with proper indentation inside the sidebar block
+    selected_existing_labels = []
+    with st.sidebar.expander("Select sources", expanded=False):
+        select_all = st.checkbox("Select all", value=True, key="existing_all")
+        base_defaults = set(default_existing)
+        for i, opt in enumerate(existing_options):
+            default_val = True if select_all else (opt in base_defaults)
+            if st.checkbox(opt, value=default_val, key=f"existing_{i}"):
+                selected_existing_labels.append(opt)
 
-selected_existing_cfg = [EXISTING_PRESETS[l] for l in selected_existing_labels]
+    selected_existing_cfg = [EXISTING_PRESETS[l] for l in selected_existing_labels]
 
     st.sidebar.markdown("---")
     st.sidebar.markdown("**Brand/Gambling flag source**")
