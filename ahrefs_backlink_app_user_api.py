@@ -573,10 +573,22 @@ if run_button:
             df_merged.drop(columns=["tld"], inplace=True)
             st.success("🔻 Blocked TLDs filtered out from result")
 
-    # ---- Final Output ----
-    st.session_state["df_merged"] = df_merged
-    st.download_button("Download Final CSV", df_merged.to_csv(index=False), file_name="ahrefs_backlinks_flagged.csv", mime="text/csv")
-    st.success("✅ Done! You can download the output above.")
+# === Results panel (always visible if we have results) ===
+if "df_merged" in st.session_state:
+    st.divider()
+    st.subheader("Results")
+
+    # Optional: show a preview of the latest results
+    st.dataframe(st.session_state["df_merged"].head(50), use_container_width=True)
+
+    # Always-on download button (survives reruns like "Export now")
+    st.download_button(
+        "Download Latest CSV",
+        st.session_state["df_merged"].to_csv(index=False),
+        file_name="ahrefs_backlinks_flagged.csv",
+        mime="text/csv",
+        key="download_latest_csv",  # stable key keeps the widget around across reruns
+    )
 
 # ==========================
 # Export to Google Sheets
