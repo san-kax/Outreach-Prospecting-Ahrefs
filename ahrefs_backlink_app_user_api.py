@@ -6,6 +6,10 @@ from urllib.parse import urlparse
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+# Google Sheets
+import gspread
+from google.oauth2.service_account import Credentials
+
 # ==========================
 # App Setup
 # ==========================
@@ -172,9 +176,7 @@ def airtable_column_to_series(records: list[dict], field_name: str) -> pd.Series
 
 @st.cache_data(show_spinner=False)
 def airtable_lookup_by_values(base_id: str, table_name: str, field_name: str, values: list[str], api_key: str, batch_size: int = 25) -> pd.Series:
-    """Fast membership check: fetch only rows where {field_name} equals any of the given values.
-    Uses filterByFormula with OR(LOWER({Field})='v1', ...). Returns a Series of matched values.
-    """
+    """Fast membership check: fetch only rows where {field_name} equals any of the given values."""
     api_key = (api_key or "").strip()
     if not api_key:
         raise RuntimeError("Airtable: empty API key")
@@ -182,7 +184,7 @@ def airtable_lookup_by_values(base_id: str, table_name: str, field_name: str, va
     headers = {"Authorization": f"Bearer {api_key}"}
 
     def esc(s: str) -> str:
-        # FIX: ensure a real backslash-escape for single quotes
+        # Correctly backslash-escape single quotes for filterByFormula
         return s.replace("'", "\\'")
 
     out = []
@@ -205,7 +207,7 @@ def airtable_lookup_by_values(base_id: str, table_name: str, field_name: str, va
             params["offset"] = offset
     return airtable_column_to_series(out, field_name)
 
-# ---- UI helper (keeps indentation simple and safe)
+# ---- UI helper for existing sources
 def render_existing_sources_ui(EXISTING_PRESETS: dict):
     st.sidebar.markdown("**Existing domains — select Airtable sources to check & EXCLUDE**")
     existing_options = list(EXISTING_PRESETS.keys())
@@ -261,7 +263,6 @@ if use_airtable:
         "Freebets-Database (appFBasaCUkEKtvpV)": ("appFBasaCUkEKtvpV", "tblmTREzfIswOuA0F", "Domain"),
     }
 
-    # Checkbox dropdown (safe helper)
     selected_existing_cfg, selected_existing_labels = render_existing_sources_ui(EXISTING_PRESETS)
 
     st.sidebar.markdown("---")
@@ -283,7 +284,7 @@ if use_airtable:
     enable_rejected = st.sidebar.checkbox("Exclude 'Outreach-Rejected-Sites' (appTf6MmZDgouu8SN)", value=True)
     enable_blocklist = st.sidebar.checkbox("Exclude 'GDC-Disavow-List' (appJTJQwjHRaAyLkw)", value=True)
 
-    # FIX: use Domain field for these lists too
+    # Use Domain field for these lists too
     rejected_cfg = [("appTf6MmZDgouu8SN", "tbliCOQZY9RICLsLP", "Domain")] if enable_rejected else []
     blocklist_cfg = [("appJTJQwjHRaAyLkw", "tbliCOQZY9RICLsLP", "Domain")] if enable_blocklist else []
 
@@ -340,6 +341,52 @@ else:
     tld_file = st.sidebar.file_uploader("Upload TLD Blocklist (Excel)", type=["xlsx"])
     st.sidebar.markdown("---")
     st.sidebar.markdown("🛑 If not using Airtable, keep the Google Sheet/CSV uploads here.")
+
+# --------------------------
+# Google Sheets Export UI
+# --------------------------
+st.sidebar.markdown("---")
+st.sidebar.header("🧾 Google Sheets Export")
+enable_gs = st.sidebar.checkbox("Enable export to Google Sheets", value=False)
+gs_key_or_url = st.sidebar.text_input("Spreadsheet URL or key", help="Paste full URL or just the spreadsheet key")
+gs_worksheet = st.sidebar.text_input("Worksheet name", value="Outreach")
+export_mode = st.sidebar.selectbox("Write mode", ["Replace sheet (overwrite)", "Append rows"], index=0)
+export_content = st.sidebar.radio("Export content", ["Domains only", "Full results (all columns)"], index=0)
+export_button = st.sidebar.button("Export now")
+
+def _open_sheet(key_or_url: str):
+    if not key_or_url:
+        raise RuntimeError("Spreadsheet URL/key is empty.")
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive",
+    ]
+    creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scopes)
+    gc = gspread.authorize(creds)
+    if "http" in key_or_url:
+        return gc.open_by_url(key_or_url)
+    return gc.open_by_key(key_or_url)
+
+def _get_or_create_worksheet(sh, title: str, cols: int = 26):
+    try:
+        return sh.worksheet(title)
+    except gspread.WorksheetNotFound:
+        return sh.add_worksheet(title=title, rows=1000, cols=cols)
+
+def _update_replace(ws, df: pd.DataFrame):
+    values = [df.columns.tolist()] + df.astype(str).fillna("").values.tolist()
+    ws.clear()
+    ws.update("A1", values)
+
+def _append_rows(ws, df: pd.DataFrame):
+    # If empty sheet, write headers first
+    try:
+        existing = ws.get_all_values()
+    except Exception:
+        existing = []
+    if not existing:
+        ws.update("A1", [df.columns.tolist()])
+    ws.append_rows(df.astype(str).fillna("").values.tolist(), value_input_option="RAW")
 
 run_button = st.sidebar.button("Run Analysis")
 
@@ -499,7 +546,6 @@ if run_button:
 
     else:
         # Legacy local-file flow
-        gambling_domains = pd.Series([], dtype="string")
         if 'gambling_file' in locals() and gambling_file is not None:
             df_compare = pd.read_csv(gambling_file)
             gambling_domains = df_compare.iloc[:, 0].dropna().str.strip().str.lower().unique()
@@ -531,6 +577,39 @@ if run_button:
     st.session_state["df_merged"] = df_merged
     st.download_button("Download Final CSV", df_merged.to_csv(index=False), file_name="ahrefs_backlinks_flagged.csv", mime="text/csv")
     st.success("✅ Done! You can download the output above.")
+
+# ==========================
+# Export to Google Sheets
+# ==========================
+if export_button:
+    try:
+        if "df_merged" not in st.session_state:
+            st.error("Run the analysis first — nothing to export yet.")
+        else:
+            df_out = st.session_state["df_merged"].copy()
+
+            if export_content == "Domains only":
+                df_out = (
+                    df_out[["referring_domain"]]
+                    .rename(columns={"referring_domain": "Domain"})
+                    .dropna()
+                    .drop_duplicates()
+                    .sort_values("Domain")
+                    .reset_index(drop=True)
+                )
+
+            sh = _open_sheet(gs_key_or_url)
+            ws = _get_or_create_worksheet(sh, gs_worksheet, cols=max(26, len(df_out.columns)+2))
+
+            if export_mode.startswith("Replace"):
+                _update_replace(ws, df_out)
+                st.success(f"Exported {len(df_out)} rows (replaced sheet).")
+            else:
+                _append_rows(ws, df_out)
+                st.success(f"Appended {len(df_out)} rows.")
+
+    except Exception as e:
+        st.error(f"Google Sheets export failed: {e}")
 
 # === Pitchbox Integration (Bulk Upload with JWT) ===
 st.sidebar.header("📤 Pitchbox Upload (Bulk)")
