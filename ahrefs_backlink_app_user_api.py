@@ -182,6 +182,7 @@ def airtable_lookup_by_values(base_id: str, table_name: str, field_name: str, va
     headers = {"Authorization": f"Bearer {api_key}"}
 
     def esc(s: str) -> str:
+        # FIX: ensure a real backslash-escape for single quotes
         return s.replace("'", "\\'")
 
     out = []
@@ -282,8 +283,9 @@ if use_airtable:
     enable_rejected = st.sidebar.checkbox("Exclude 'Outreach-Rejected-Sites' (appTf6MmZDgouu8SN)", value=True)
     enable_blocklist = st.sidebar.checkbox("Exclude 'GDC-Disavow-List' (appJTJQwjHRaAyLkw)", value=True)
 
-    rejected_cfg = [("appTf6MmZDgouu8SN", "tbliCOQZY9RICLsLP", "Rejected Domains")] if enable_rejected else []
-    blocklist_cfg = [("appJTJQwjHRaAyLkw", "tbliCOQZY9RICLsLP", "Disavow-Domains")] if enable_blocklist else []
+    # FIX: use Domain field for these lists too
+    rejected_cfg = [("appTf6MmZDgouu8SN", "tbliCOQZY9RICLsLP", "Domain")] if enable_rejected else []
+    blocklist_cfg = [("appJTJQwjHRaAyLkw", "tbliCOQZY9RICLsLP", "Domain")] if enable_blocklist else []
 
     # Speed mode for Airtable lookups
     fast_match = st.sidebar.checkbox(
