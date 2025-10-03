@@ -1,9 +1,9 @@
-import streamlit as st
-import pandas as pd
-import requests
-import time
-from urllib.parse import urlparse
 import os
+import time
+import requests
+import pandas as pd
+import streamlit as st
+from urllib.parse import urlparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Google Sheets
@@ -15,6 +15,10 @@ from google.oauth2.service_account import Credentials
 # ==========================
 st.set_page_config(page_title="Ahrefs Backlink Analyzer", layout="wide")
 st.title("📬 Outreach Prospecting Tool")
+
+# Keep last results between reruns so Export/Download still work
+if "df_merged" not in st.session_state:
+    st.session_state["df_merged"] = None
 
 # ==========================
 # Helpers
@@ -45,18 +49,18 @@ def to_domain_only(value: str) -> str:
 @st.cache_data(show_spinner=False)
 def extract_tld(domain: str) -> str:
     try:
-        parts = str(domain).lower().split('.')
+        parts = str(domain).lower().split(".")
         if len(parts) >= 2:
-            return '.' + parts[-1]
-        return ''
+            return "." + parts[-1]
+        return ""
     except Exception:
-        return ''
+        return ""
 
 # -------- Ahrefs -------
 
 def fetch_backlinks(target_url, limit, headers):
     api_url = (
-        f"https://api.ahrefs.com/v3/site-explorer/all-backlinks?"
+        "https://api.ahrefs.com/v3/site-explorer/all-backlinks?"
         f"target={requests.utils.quote(target_url)}&limit={limit}&mode=prefix&select={requests.utils.quote(SELECT_FIELDS)}"
     )
     response = requests.get(api_url, headers=headers)
@@ -66,9 +70,7 @@ def fetch_backlinks(target_url, limit, headers):
             b["target_url"] = target_url
             b["referring_domain"] = extract_domain(b.get("url_from", ""))
         return backlinks
-    else:
-        return []
-
+    return []
 
 def parallel_fetch_backlinks(urls, limit, headers, max_workers=8):
     results = []
@@ -85,11 +87,9 @@ def parallel_fetch_backlinks(urls, limit, headers, max_workers=8):
             progress.progress(done_count / len(urls))
     return results
 
-
 def chunk_list(data, size=100):
     for i in range(0, len(data), size):
         yield data[i:i+size]
-
 
 def fetch_batch_metrics(domains_chunk, headers):
     url = "https://api.ahrefs.com/v3/batch-analysis/batch-analysis"
@@ -102,10 +102,8 @@ def fetch_batch_metrics(domains_chunk, headers):
     response = requests.post(url, headers=headers, json=payload)
     if response.status_code == 200:
         return response.json()
-    else:
-        st.warning(f"Ahrefs batch error {response.status_code}")
-        return None
-
+    st.warning(f"Ahrefs batch error {response.status_code}")
+    return None
 
 def parse_batch_results(api_data, input_domains):
     rows = []
@@ -143,7 +141,10 @@ def airtable_fetch_all(base_id: str, table_name: str, api_key: str, view: str | 
     while True:
         r = requests.get(url, headers=headers, params=params)
         if r.status_code == 401:
-            raise RuntimeError("Airtable 401 AUTHENTICATION_REQUIRED — paste the *token VALUE* (starts with 'pat…'), and ensure it has data.records:read + base access.")
+            raise RuntimeError(
+                "Airtable 401 AUTHENTICATION_REQUIRED — paste the *token VALUE* "
+                "(starts with 'pat…'), and ensure it has data.records:read + base access."
+            )
         if r.status_code != 200:
             raise RuntimeError(f"Airtable error {r.status_code}: {r.text}")
         data = r.json()
@@ -176,7 +177,7 @@ def airtable_column_to_series(records: list[dict], field_name: str) -> pd.Series
 
 @st.cache_data(show_spinner=False)
 def airtable_lookup_by_values(base_id: str, table_name: str, field_name: str, values: list[str], api_key: str, batch_size: int = 25) -> pd.Series:
-    """Fast membership check: fetch only rows where {field_name} equals any of the given values."""
+    """Fetch only rows where {field_name} matches any given value using filterByFormula."""
     api_key = (api_key or "").strip()
     if not api_key:
         raise RuntimeError("Airtable: empty API key")
@@ -184,7 +185,7 @@ def airtable_lookup_by_values(base_id: str, table_name: str, field_name: str, va
     headers = {"Authorization": f"Bearer {api_key}"}
 
     def esc(s: str) -> str:
-        # Correctly backslash-escape single quotes for filterByFormula
+        # Backslash-escape single quotes for Airtable formula strings
         return s.replace("'", "\\'")
 
     out = []
@@ -207,7 +208,7 @@ def airtable_lookup_by_values(base_id: str, table_name: str, field_name: str, va
             params["offset"] = offset
     return airtable_column_to_series(out, field_name)
 
-# ---- UI helper for existing sources
+# ---- UI helper (checkbox list)
 def render_existing_sources_ui(EXISTING_PRESETS: dict):
     st.sidebar.markdown("**Existing domains — select Airtable sources to check & EXCLUDE**")
     existing_options = list(EXISTING_PRESETS.keys())
@@ -306,11 +307,11 @@ if use_airtable:
             rows = []
             for line in text.splitlines():
                 line = line.strip()
-                if not line or line.startswith('#'):
+                if not line or line.startswith("#"):
                     continue
-                if '#' in line:
-                    line = line.split('#', 1)[0].strip()
-                parts = [p.strip() for p in line.split(',')]
+                if "#" in line:
+                    line = line.split("#", 1)[0].strip()
+                parts = [p.strip() for p in line.split(",")]
                 if len(parts) >= 3:
                     rows.append((parts[0], parts[1], parts[2]))
             return rows
@@ -323,8 +324,9 @@ if use_airtable:
     # Connection tester
     if st.sidebar.button("Test Airtable connection"):
         try:
-            api_key = at_api_key.strip()
-            r = requests.get("https://api.airtable.com/v0/meta/bases", headers={"Authorization": f"Bearer {api_key}"})
+            api_key_test = at_api_key.strip()
+            r = requests.get("https://api.airtable.com/v0/meta/bases",
+                             headers={"Authorization": f"Bearer {api_key_test}"})
             if r.status_code == 200:
                 bases = r.json().get("bases", [])
                 base_ids = [b.get("id") for b in bases]
@@ -352,7 +354,9 @@ gs_key_or_url = st.sidebar.text_input("Spreadsheet URL or key", help="Paste full
 gs_worksheet = st.sidebar.text_input("Worksheet name", value="Outreach")
 export_mode = st.sidebar.selectbox("Write mode", ["Replace sheet (overwrite)", "Append rows"], index=0)
 export_content = st.sidebar.radio("Export content", ["Domains only", "Full results (all columns)"], index=0)
-export_button = st.sidebar.button("Export now")
+
+can_export = isinstance(st.session_state.get("df_merged"), pd.DataFrame) and not st.session_state["df_merged"].empty
+export_button = st.sidebar.button("Export now", disabled=not (enable_gs and can_export))
 
 def _open_sheet(key_or_url: str):
     if not key_or_url:
@@ -379,7 +383,6 @@ def _update_replace(ws, df: pd.DataFrame):
     ws.update("A1", values)
 
 def _append_rows(ws, df: pd.DataFrame):
-    # If empty sheet, write headers first
     try:
         existing = ws.get_all_values()
     except Exception:
@@ -476,8 +479,7 @@ if run_button:
                 existing_series = pd.concat(existing_series, ignore_index=True) if existing_series else pd.Series([], dtype="string")
             else:
                 existing_records = []
-                for cfg in selected_existing_cfg:
-                    base_id, table_id, field_name = cfg
+                for base_id, table_id, field_name in selected_existing_cfg:
                     recs = airtable_fetch_all(base_id, table_id, at_api_key, fields=[field_name])
                     existing_records += recs
                 existing_series = airtable_column_to_series(existing_records, selected_existing_cfg[0][2]) if selected_existing_cfg else pd.Series([], dtype="string")
@@ -492,8 +494,7 @@ if run_button:
                 brand_series = pd.concat(brand_series, ignore_index=True) if brand_series else pd.Series([], dtype="string")
             else:
                 brand_records = []
-                for cfg in brand_flag_cfg:
-                    base_id, table_id, field_name = cfg
+                for base_id, table_id, field_name in brand_flag_cfg:
                     recs = airtable_fetch_all(base_id, table_id, at_api_key, fields=[field_name])
                     brand_records += recs
                 brand_series = airtable_column_to_series(brand_records, brand_flag_cfg[0][2]) if brand_flag_cfg else pd.Series([], dtype="string")
@@ -573,33 +574,36 @@ if run_button:
             df_merged.drop(columns=["tld"], inplace=True)
             st.success("🔻 Blocked TLDs filtered out from result")
 
+    # ---- Final Output ----
+    st.session_state["df_merged"] = df_merged.copy()
+    st.success(f"✅ Analysis complete. {len(df_merged)} rows ready.")
+
 # === Results panel (always visible if we have results) ===
-if "df_merged" in st.session_state:
+_last = st.session_state.get("df_merged")
+if isinstance(_last, pd.DataFrame) and not _last.empty:
     st.divider()
     st.subheader("Results")
+    st.dataframe(_last.head(50), use_container_width=True)
 
-    # Optional: show a preview of the latest results
-    st.dataframe(st.session_state["df_merged"].head(50), use_container_width=True)
-
-    # Always-on download button (survives reruns like "Export now")
     st.download_button(
-        "Download Latest CSV",
-        st.session_state["df_merged"].to_csv(index=False),
+        "⬇️ Download Latest CSV",
+        _last.to_csv(index=False),
         file_name="ahrefs_backlinks_flagged.csv",
         mime="text/csv",
-        key="download_latest_csv",  # stable key keeps the widget around across reruns
+        key="download_latest_csv",
     )
+else:
+    st.info("Run the analysis to generate results before downloading/exporting.")
 
 # ==========================
 # Export to Google Sheets
 # ==========================
 if export_button:
     try:
-        if "df_merged" not in st.session_state:
+        df_out = st.session_state.get("df_merged")
+        if not isinstance(df_out, pd.DataFrame) or df_out.empty:
             st.error("Run the analysis first — nothing to export yet.")
         else:
-            df_out = st.session_state["df_merged"].copy()
-
             if export_content == "Domains only":
                 df_out = (
                     df_out[["referring_domain"]]
@@ -611,7 +615,7 @@ if export_button:
                 )
 
             sh = _open_sheet(gs_key_or_url)
-            ws = _get_or_create_worksheet(sh, gs_worksheet, cols=max(26, len(df_out.columns)+2))
+            ws = _get_or_create_worksheet(sh, gs_worksheet, cols=max(26, len(df_out.columns) + 2))
 
             if export_mode.startswith("Replace"):
                 _update_replace(ws, df_out)
@@ -619,7 +623,6 @@ if export_button:
             else:
                 _append_rows(ws, df_out)
                 st.success(f"Appended {len(df_out)} rows.")
-
     except Exception as e:
         st.error(f"Google Sheets export failed: {e}")
 
@@ -632,7 +635,7 @@ upload_button = st.sidebar.button("Upload to Pitchbox")
 if upload_button:
     if not pb_api_key or not pb_campaign_id:
         st.error("⚠️ Please enter both API key (JWT) and campaign ID.")
-    elif "df_merged" not in st.session_state:
+    elif not isinstance(st.session_state.get("df_merged"), pd.DataFrame):
         st.error("⚠️ You must run the backlink analysis before uploading to Pitchbox.")
     elif "Found in Gambling.com" not in st.session_state["df_merged"].columns:
         st.error("🔍 Can't find gambling flag. Ensure you ran the analysis and (if using Airtable) configured the tables/fields.")
