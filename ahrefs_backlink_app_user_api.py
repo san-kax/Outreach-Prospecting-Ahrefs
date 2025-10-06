@@ -1,3 +1,4 @@
+# outreach_prospecting_tool.py
 import os
 import time
 import requests
@@ -349,15 +350,31 @@ else:
 # --------------------------
 st.sidebar.markdown("---")
 st.sidebar.header("🧾 Google Sheets Export")
-enable_gs = st.sidebar.checkbox("Enable export to Google Sheets", value=False)
+
 gs_key_or_url = st.sidebar.text_input("Spreadsheet URL or key", help="Paste full URL or just the spreadsheet key")
 gs_worksheet = st.sidebar.text_input("Worksheet name", value="Outreach")
-export_mode = st.sidebar.selectbox("Write mode", ["Replace sheet (overwrite)", "Append rows"], index=0)
+export_mode = st.sidebar.selectbox("Write mode", ["Replace sheet (overwrite)", "Append rows"], index=1)
 export_content = st.sidebar.radio("Export content", ["Domains only", "Full results (all columns)"], index=0)
 
-can_export = isinstance(st.session_state.get("df_merged"), pd.DataFrame) and not st.session_state["df_merged"].empty
-export_button = st.sidebar.button("Export now", disabled=not (enable_gs and can_export))
+# Enable the button only when we can actually export
+export_ready = (
+    bool(gs_key_or_url.strip())
+    and isinstance(st.session_state.get("df_merged"), pd.DataFrame)
+    and not st.session_state["df_merged"].empty
+)
+export_button = st.sidebar.button("Export now", disabled=not export_ready, use_container_width=True)
 
+# Helpful hints when disabled
+if not export_ready:
+    with st.sidebar:
+        if not gs_key_or_url.strip():
+            st.caption("↖ Paste your Google Sheet URL or key to enable export.")
+        elif not isinstance(st.session_state.get("df_merged"), pd.DataFrame):
+            st.caption("Run the analysis first — nothing to export yet.")
+        else:
+            st.caption("No rows to export.")
+
+# Google Sheets helpers
 def _open_sheet(key_or_url: str):
     if not key_or_url:
         raise RuntimeError("Spreadsheet URL/key is empty.")
