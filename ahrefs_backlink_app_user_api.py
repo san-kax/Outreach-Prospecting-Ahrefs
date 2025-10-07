@@ -261,7 +261,15 @@ st.sidebar.markdown("---")
 # Airtable Toggle & Config
 use_airtable = st.sidebar.checkbox("Use Airtable for filters (existing / brand flag / rejected / blocklist)", value=True)
 # Read PAT from secrets (no typing each run)
-AIRTABLE_PAT = (st.secrets.get("at_api_key") or "").strip()
+try:
+    AIRTABLE_PAT = st.secrets["at_api_key"].strip()
+    st.success(f"✅ Airtable token loaded: {AIRTABLE_PAT[:10]}...")
+except KeyError:
+    AIRTABLE_PAT = ""
+    st.error("❌ Airtable token not found in secrets")
+except Exception as e:
+    AIRTABLE_PAT = ""
+    st.error(f"❌ Error loading Airtable token: {e}")
 
 if use_airtable:
     st.sidebar.subheader("Airtable")
