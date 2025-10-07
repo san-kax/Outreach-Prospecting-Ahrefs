@@ -262,18 +262,11 @@ st.sidebar.markdown("---")
 use_airtable = st.sidebar.checkbox("Use Airtable for filters (existing / brand flag / rejected / blocklist)", value=True)
 # Read PAT from secrets (no typing each run)
 try:
-    # Try to get it from the nested location
-    AIRTABLE_PAT = st.secrets["gcp_service_account"]["at_api_key"].strip()
+    AIRTABLE_PAT = st.secrets["at_api_key"].strip()
     st.success(f"✅ Airtable token loaded: {AIRTABLE_PAT[:10]}...")
 except KeyError:
     AIRTABLE_PAT = ""
     st.error("❌ Airtable token not found in secrets")
-    
-    # Debug information
-    st.write("🔍 **Debug Information:**")
-    st.write(f"Available secrets keys: {list(st.secrets.keys())}")
-    st.write(f"GCP service account keys: {list(st.secrets['gcp_service_account'].keys())}")
-    
 except Exception as e:
     AIRTABLE_PAT = ""
     st.error(f"❌ Error loading Airtable token: {e}")
