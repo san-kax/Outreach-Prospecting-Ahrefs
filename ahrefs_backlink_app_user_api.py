@@ -58,12 +58,12 @@ def extract_tld(domain: str) -> str:
         return ""
 
 def normalize_tld_series(s: pd.Series) -> pd.Series:
-    """Ensure TLDs look like '.de' (adds leading dot, lower-cases, strips)."""
+    """Normalize to '.de' style (lowercased, with leading dot)."""
     s = s.astype(str).str.strip().str.lower()
     return s.apply(lambda x: x if x.startswith(".") else (("." + x) if x else x))
 
 def mask_token(tok: str) -> str:
-    return "pat…"+tok[-4:] if tok and tok.startswith("pat") and len(tok) > 6 else "(not set)"
+    return "pat…" + tok[-4:] if tok and tok.startswith("pat") and len(tok) > 6 else "(not set)"
 
 # -------- Ahrefs -------
 def fetch_backlinks(target_url, limit, headers):
@@ -131,7 +131,8 @@ def parse_batch_results(api_data, input_domains):
 
 # -------- Airtable -------
 @st.cache_data(show_spinner=False)
-def airtable_fetch_all(base_id: str, table_name: str, api_key: str, view: str | None = None, fields: list[str] | None = None) -> list[dict]:
+def airtable_fetch_all(base_id, table_name, api_key, view=None, fields=None):
+    """Fetch all rows from an Airtable table (REST API), handling pagination."""
     api_key = (api_key or "").strip()
     if not api_key:
         raise RuntimeError("Airtable: empty API key")
@@ -160,7 +161,7 @@ def airtable_fetch_all(base_id: str, table_name: str, api_key: str, view: str | 
     return out
 
 @st.cache_data(show_spinner=False)
-def airtable_column_to_series(records: list[dict], field_name: str) -> pd.Series:
+def airtable_column_to_series(records, field_name):
     values = []
     for rec in records:
         fields = rec.get("fields", {})
@@ -175,11 +176,11 @@ def airtable_column_to_series(records: list[dict], field_name: str) -> pd.Series
                     values.append(str(item))
         else:
             values.append(str(v))
-    s = pd.Series(values, dtype="string").dropna()
-    return s
+    return pd.Series(values, dtype="string").dropna()
 
 @st.cache_data(show_spinner=False)
-def airtable_lookup_by_values(base_id: str, table_name: str, field_name: str, values: list[str], api_key: str, batch_size: int = 25) -> pd.Series:
+def airtable_lookup_by_values(base_id, table_name, field_name, values, api_key, batch_size=25):
+    """Fetch only rows where {field_name} matches any given value using filterByFormula."""
     api_key = (api_key or "").strip()
     if not api_key:
         raise RuntimeError("Airtable: empty API key")
@@ -187,7 +188,7 @@ def airtable_lookup_by_values(base_id: str, table_name: str, field_name: str, va
     headers = {"Authorization": f"Bearer {api_key}"}
 
     def esc(s: str) -> str:
-        # Properly escape single quotes for filterByFormula strings
+        # Backslash-escape single quotes for Airtable formula strings
         return s.replace("'", "\\'")
 
     out = []
@@ -195,11 +196,11 @@ def airtable_lookup_by_values(base_id: str, table_name: str, field_name: str, va
     for batch in chunk_list(values, batch_size):
         formula_parts = [f"LOWER({{{field_name}}})='{esc(v.lower())}'" for v in batch]
         formula = "OR(" + ",".join(formula_parts) + ")"
-        params = {"filterByFormula": formula, "fields[]": [field_name], "maxRecords": len(batch)}
+        params = {"filterByFormula": formula, "fields[]": [field_name]}
         while True:
             r = requests.get(url, headers=headers, params=params)
             if r.status_code == 401:
-                raise RuntimeError("401 AUTHENTICATION_REQUIRED — token invalid OR not allowed for this base/table.")
+                raise RuntimeError("Airtable 401 AUTHENTICATION_REQUIRED — check token + base access.")
             if r.status_code != 200:
                 raise RuntimeError(f"Airtable error {r.status_code}: {r.text}")
             data = r.json()
@@ -209,6 +210,30 @@ def airtable_lookup_by_values(base_id: str, table_name: str, field_name: str, va
                 break
             params["offset"] = offset
     return airtable_column_to_series(out, field_name)
+
+# ---- UI helper (checkbox list)
+def render_existing_sources_ui(EXISTING_PRESETS: dict):
+    st.sidebar.markdown("**Existing domains — select Airtable sources to check & EXCLUDE**")
+    existing_options = list(EXISTING_PRESETS.keys())
+    default_existing = [
+        "Prospect-Data (appHdhjsWVRxaCvcR)",
+        "GDC-Database (appUoOvkqzJvyyMvC)",
+        "WB-Database (appueIgn44RaVH6ot)",
+        "Freebets-Database (appFBasaCUkEKtvpV)",
+    ]
+    default_existing = [o for o in default_existing if o in existing_options]
+
+    selected_labels = []
+    with st.sidebar.expander("Select sources", expanded=False):
+        select_all = st.checkbox("Select all", value=True, key="existing_all")
+        base_defaults = set(default_existing)
+        for i, opt in enumerate(existing_options):
+            default_val = True if select_all else (opt in base_defaults)
+            if st.checkbox(opt, value=default_val, key=f"existing_{i}"):
+                selected_labels.append(opt)
+
+    selected_cfg = [EXISTING_PRESETS[l] for l in selected_labels]
+    return selected_cfg, selected_labels
 
 # ==========================
 # Sidebar — Inputs
@@ -229,17 +254,16 @@ st.sidebar.markdown("---")
 
 # Airtable Toggle & Config
 use_airtable = st.sidebar.checkbox("Use Airtable for filters (existing / brand flag / rejected / blocklist)", value=True)
-# Read PAT from secrets (no typing each run)
 AIRTABLE_PAT = (st.secrets.get("at_api_key") or "").strip()
 
 if use_airtable:
     st.sidebar.subheader("Airtable")
     if not AIRTABLE_PAT:
-        st.sidebar.error("Add your Airtable Personal Access Token to `st.secrets[\"at_api_key\"]`.")
+        st.sidebar.error("Add your Airtable Personal Access Token to `st.secrets['at_api_key']`.")
     else:
         st.sidebar.caption(f"Using token from secrets: {mask_token(AIRTABLE_PAT)}")
 
-    # Presets (labels -> triplets)
+    # Presets (labels -> triplets: baseId, tableIdOrName, fieldName)
     EXISTING_PRESETS = {
         "Prospect-Data (appHdhjsWVRxaCvcR)": ("appHdhjsWVRxaCvcR", "tbliCOQZY9RICLsLP", "Domain"),
         "Prospect-Data-1 (appVyIiM5boVyoBhf)": ("appVyIiM5boVyoBhf", "tbliCOQZY9RICLsLP", "Domain"),
@@ -248,25 +272,7 @@ if use_airtable:
         "Freebets-Database (appFBasaCUkEKtvpV)": ("appFBasaCUkEKtvpV", "tblmTREzfIswOuA0F", "Domain"),
     }
 
-    st.sidebar.markdown("**Existing domains — select Airtable sources to check & EXCLUDE**")
-    existing_options = list(EXISTING_PRESETS.keys())
-    default_existing = [
-        "Prospect-Data (appHdhjsWVRxaCvcR)",
-        "GDC-Database (appUoOvkqzJvyyMvC)",
-        "WB-Database (appueIgn44RaVH6ot)",
-        "Freebets-Database (appFBasaCUkEKtvpV)",
-    ]
-
-    # Checkbox dropdown
-    selected_existing_labels = []
-    with st.sidebar.expander("Select sources", expanded=False):
-        select_all = st.checkbox("Select all", value=True, key="existing_all")
-        base_defaults = set(default_existing)
-        for i, opt in enumerate(existing_options):
-            default_val = True if select_all else (opt in base_defaults)
-            if st.checkbox(opt, value=default_val, key=f"existing_{i}"):
-                selected_existing_labels.append(opt)
-    selected_existing_cfg = [EXISTING_PRESETS[l] for l in selected_existing_labels]
+    selected_existing_cfg, selected_existing_labels = render_existing_sources_ui(EXISTING_PRESETS)
 
     st.sidebar.markdown("---")
     st.sidebar.markdown("**Brand/Gambling flag source**")
@@ -287,6 +293,7 @@ if use_airtable:
     enable_rejected = st.sidebar.checkbox("Exclude 'Outreach-Rejected-Sites' (appTf6MmZDgouu8SN)", value=True)
     enable_blocklist = st.sidebar.checkbox("Exclude 'GDC-Disavow-List' (appJTJQwjHRaAyLkw)", value=True)
 
+    # Use Domain field for these lists too
     rejected_cfg = [("appTf6MmZDgouu8SN", "tbliCOQZY9RICLsLP", "Domain")] if enable_rejected else []
     blocklist_cfg = [("appJTJQwjHRaAyLkw", "tbliCOQZY9RICLsLP", "Domain")] if enable_blocklist else []
 
@@ -304,7 +311,7 @@ if use_airtable:
         custom_rejected_txt = st.text_area("Additional REJECTED sources (exclude)", height=80, value="")
         custom_blocklist_txt = st.text_area("Additional BLOCKLIST sources (exclude)", height=80, value="")
 
-        def parse_cfg(text: str) -> list:
+        def parse_cfg(text: str):
             rows = []
             for line in text.splitlines():
                 line = line.strip()
@@ -322,7 +329,7 @@ if use_airtable:
         rejected_cfg += parse_cfg(custom_rejected_txt)
         blocklist_cfg += parse_cfg(custom_blocklist_txt)
 
-    # Connection tester — test by reading 1 record from each configured base/table
+    # Connection tester — try reading one record from each configured table
     if st.sidebar.button("Test Airtable connection"):
         if not AIRTABLE_PAT:
             st.error("No token found in secrets['at_api_key'].")
@@ -330,13 +337,11 @@ if use_airtable:
             tested = set()
             any_ok = False
             problems = []
-            # Collect a few tables to try
             test_cfgs = []
             test_cfgs += selected_existing_cfg
             test_cfgs += brand_flag_cfg
             test_cfgs += rejected_cfg
             test_cfgs += blocklist_cfg
-            # Fallback to one known preset if nothing selected
             if not test_cfgs:
                 test_cfgs = [EXISTING_PRESETS["Prospect-Data (appHdhjsWVRxaCvcR)"]]
             headers = {"Authorization": f"Bearer {AIRTABLE_PAT}"}
@@ -369,13 +374,13 @@ else:
     st.sidebar.markdown("---")
     st.sidebar.markdown("🛑 If not using Airtable, keep the Google Sheet/CSV uploads here.")
 
-# --- TLD Blocklist (CSV or Excel) ---
+# --- TLD Blocklist (CSV or Excel) — always available ---
 st.sidebar.markdown("---")
 st.sidebar.subheader("🌐 TLD Blocklist (optional)")
 tld_block_file = st.sidebar.file_uploader(
     "Upload TLD blocklist (CSV or Excel)",
     type=["csv", "xlsx", "xls"],
-    help="First column should contain TLDs like .de, .ru or de, ru",
+    help="First column should contain TLDs like .de, .ru (or de, ru).",
 )
 
 # --------------------------
@@ -388,6 +393,7 @@ gs_worksheet = st.sidebar.text_input("Worksheet name", value="Outreach")
 export_mode = st.sidebar.selectbox("Write mode", ["Replace sheet (overwrite)", "Append rows"], index=1)
 export_content = st.sidebar.radio("Export content", ["Domains only", "Full results (all columns)"], index=0)
 
+# Enable the button only when we can actually export
 export_ready = (
     bool(gs_key_or_url.strip())
     and isinstance(st.session_state.get("df_merged"), pd.DataFrame)
@@ -395,6 +401,7 @@ export_ready = (
 )
 export_button = st.sidebar.button("Export now", disabled=not export_ready, use_container_width=True)
 
+# Helpful hints when disabled
 if not export_ready:
     with st.sidebar:
         if not gs_key_or_url.strip():
@@ -518,34 +525,40 @@ if run_button:
             cand = list({to_domain_only(d) for d in df_merged["referring_domain"].astype(str).tolist()})
 
             # Existing domains to EXCLUDE
-            if fast_match:
-                existing_series = []
-                for (base_id, table_id, field_name) in selected_existing_cfg:
-                    s = airtable_lookup_by_values(base_id, table_id, field_name, cand, AIRTABLE_PAT)
-                    existing_series.append(s)
-                existing_series = pd.concat(existing_series, ignore_index=True) if existing_series else pd.Series([], dtype="string")
+            if 'selected_existing_cfg' in locals() and selected_existing_cfg:
+                if fast_match:
+                    existing_series = []
+                    for (base_id, table_id, field_name) in selected_existing_cfg:
+                        s = airtable_lookup_by_values(base_id, table_id, field_name, cand, AIRTABLE_PAT)
+                        existing_series.append(s)
+                    existing_series = pd.concat(existing_series, ignore_index=True) if existing_series else pd.Series([], dtype="string")
+                else:
+                    existing_records = []
+                    for base_id, table_id, field_name in selected_existing_cfg:
+                        recs = airtable_fetch_all(base_id, table_id, AIRTABLE_PAT, fields=[field_name])
+                        existing_records += recs
+                    existing_series = airtable_column_to_series(existing_records, selected_existing_cfg[0][2])
+                existing_domains = set(existing_series.map(to_domain_only).dropna().unique())
             else:
-                existing_records = []
-                for base_id, table_id, field_name in selected_existing_cfg:
-                    recs = airtable_fetch_all(base_id, table_id, AIRTABLE_PAT, fields=[field_name])
-                    existing_records += recs
-                existing_series = airtable_column_to_series(existing_records, selected_existing_cfg[0][2]) if selected_existing_cfg else pd.Series([], dtype="string")
-            existing_domains = set(existing_series.map(to_domain_only).dropna().unique())
+                existing_domains = set()
 
             # Brand flag
-            if fast_match:
-                brand_series = []
-                for (base_id, table_id, field_name) in brand_flag_cfg:
-                    s = airtable_lookup_by_values(base_id, table_id, field_name, cand, AIRTABLE_PAT)
-                    brand_series.append(s)
-                brand_series = pd.concat(brand_series, ignore_index=True) if brand_series else pd.Series([], dtype="string")
+            if 'brand_flag_cfg' in locals() and brand_flag_cfg:
+                if fast_match:
+                    brand_series = []
+                    for (base_id, table_id, field_name) in brand_flag_cfg:
+                        s = airtable_lookup_by_values(base_id, table_id, field_name, cand, AIRTABLE_PAT)
+                        brand_series.append(s)
+                    brand_series = pd.concat(brand_series, ignore_index=True) if brand_series else pd.Series([], dtype="string")
+                else:
+                    brand_records = []
+                    for base_id, table_id, field_name in brand_flag_cfg:
+                        recs = airtable_fetch_all(base_id, table_id, AIRTABLE_PAT, fields=[field_name])
+                        brand_records += recs
+                    brand_series = airtable_column_to_series(brand_records, brand_flag_cfg[0][2])
+                brand_domains = set(brand_series.map(to_domain_only).dropna().unique())
             else:
-                brand_records = []
-                for base_id, table_id, field_name in brand_flag_cfg:
-                    recs = airtable_fetch_all(base_id, table_id, AIRTABLE_PAT, fields=[field_name])
-                    brand_records += recs
-                brand_series = airtable_column_to_series(brand_records, brand_flag_cfg[0][2]) if brand_flag_cfg else pd.Series([], dtype="string")
-            brand_domains = set(brand_series.map(to_domain_only).dropna().unique())
+                brand_domains = set()
 
             # Rejected & Blocklist
             def gather(cfgs):
@@ -566,6 +579,7 @@ if run_button:
 
             rejected_domains = gather(rejected_cfg)
             blocklisted_domains = gather(blocklist_cfg)
+
         except Exception as e:
             st.error(f"Airtable fetch failed: {e}")
             st.stop()
@@ -577,7 +591,8 @@ if run_button:
 
         # Exclusions
         before = len(df_merged)
-        df_merged = df_merged[~df_merged["referring_domain"].isin(existing_domains)]
+        if existing_domains:
+            df_merged = df_merged[~df_merged["referring_domain"].isin(existing_domains)]
         removed_existing = before - len(df_merged)
 
         before2 = len(df_merged)
