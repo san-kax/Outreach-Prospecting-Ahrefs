@@ -267,6 +267,12 @@ try:
 except KeyError:
     AIRTABLE_PAT = ""
     st.error("❌ Airtable token not found in secrets")
+    
+    # Add this debug information
+    st.write("🔍 **Debug Information:**")
+    st.write(f"Available secrets keys: {list(st.secrets.keys())}")
+    st.write(f"All secrets: {dict(st.secrets)}")
+    
 except Exception as e:
     AIRTABLE_PAT = ""
     st.error(f"❌ Error loading Airtable token: {e}")
