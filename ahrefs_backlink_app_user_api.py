@@ -65,13 +65,6 @@ def normalize_tld_series(s: pd.Series) -> pd.Series:
 def mask_token(tok: str) -> str:
     return "pat…" + tok[-4:] if tok and tok.startswith("pat") and len(tok) > 6 else "(not set)"
 
-def validate_ahrefs_key(api_key: str) -> bool:
-    """Validate Ahrefs API key format"""
-    if not api_key:
-        return False
-    # Ahrefs keys typically start with 'ahrefs_' and are longer
-    return len(api_key) > 20 and api_key.startswith("ahrefs_")
-
 def get_gcp_credentials():
     """Safely get GCP credentials from secrets"""
     try:
@@ -248,8 +241,6 @@ input_file = st.sidebar.file_uploader("Upload Input URLs CSV", type=["csv"])
 
 # Ahrefs
 api_key = st.sidebar.text_input("Enter your Ahrefs API Key", type="password")
-if api_key and not validate_ahrefs_key(api_key):
-    st.sidebar.error("Invalid Ahrefs API key format")
 
 max_urls = st.sidebar.number_input("Max input URLs to process", min_value=1, max_value=500, value=10)
 limit_backlinks = st.sidebar.number_input("Backlinks per URL (limit)", min_value=1, max_value=1000, value=20)
