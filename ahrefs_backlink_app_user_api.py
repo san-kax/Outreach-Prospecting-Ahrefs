@@ -268,7 +268,7 @@ if use_airtable:
         "GDC-Database (appUoOvkqzJvyyMvC)": ("appUoOvkqzJvyyMvC", "tbliCOQZY9RICLsLP", "Domain"),
         "WB-Database (appueIgn44RaVH6ot)": ("appueIgn44RaVH6ot", "tbl3vMYv4RzKfuBf4", "Domain"),
         "Freebets-Database (appFBasaCUkEKtvpV)": ("appFBasaCUkEKtvpV", "tblmTREzfIswOuA0F", "Domain"),
-        "Casinos-Links (appay75NrffUxBMbM)": ("appay75NrffUxBMbM", "tblx8ZGluvQ9cWdXh", "Domain"),
+        "Casinos-Links (appay75NrffUxBMbM)": ("appay75NrffUxBMbM", "tblx8ZGIuvQ9cWdXh", "Domain"),
         "Local States Vertical Live Links (app08yUTcPhJVPxCI)": ("app08yUTcPhJVPxCI", "Sheet1", "Domain"),
         "Sports Vertical Bookies.com and Rotowire (appDFsy6RWw5TRNH6)": ("appDFsy6RWw5TRNH6", "tbl8whN06WyCOo5uk", "Domain"),
     }
@@ -384,8 +384,12 @@ if use_airtable:
                     problems.append(f"{r.status_code} for base {base_id}, table '{table_id_or_name}': {r.text}")
             if problems:
                 st.error("Some checks failed:\n" + "\n".join(problems))
-            if any_ok:
-                st.info("If some bases failed, add those base IDs to the PAT's allowed bases and ensure scope `data.records:read`.")
+                # Show helpful instructions for permission errors
+                has_permission_errors = any("401" in p or "403" in p for p in problems)
+                if has_permission_errors:
+                    st.info("If some bases failed, add those base IDs to the PAT's allowed bases and ensure scope `data.records:read`.")
+            if any_ok and not problems:
+                st.info("All checks passed! ✅")
 
 else:
     # Legacy local-file flow (no Airtable)
