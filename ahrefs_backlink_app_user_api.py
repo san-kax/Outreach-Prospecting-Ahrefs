@@ -268,6 +268,9 @@ if use_airtable:
         "GDC-Database (appUoOvkqzJvyyMvC)": ("appUoOvkqzJvyyMvC", "tbliCOQZY9RICLsLP", "Domain"),
         "WB-Database (appueIgn44RaVH6ot)": ("appueIgn44RaVH6ot", "tbl3vMYv4RzKfuBf4", "Domain"),
         "Freebets-Database (appFBasaCUkEKtvpV)": ("appFBasaCUkEKtvpV", "tblmTREzfIswOuA0F", "Domain"),
+        "Casinos-Links (appay75NrffUxBMbM)": ("appay75NrffUxBMbM", "tblx8ZGluvQ9cWdXh", "Domain"),
+        "Local States Vertical Live Links (app08yUTcPhJVPxCI)": ("app08yUTcPhJVPxCI", "Sheet1", "Domain"),
+        "Sports Vertical Bookies.com and Rotowire (appDFsy6RWw5TRNH6)": ("appDFsy6RWw5TRNH6", "tbl8whN06WyCOo5uk", "Domain"),
     }
 
     st.sidebar.markdown("**Existing domains — select Airtable sources to check & EXCLUDE**")
