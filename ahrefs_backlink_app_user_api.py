@@ -271,6 +271,14 @@ if use_airtable:
         "Casinos-Links (appay75NrffUxBMbM)": ("appay75NrffUxBMbM", "tblx8ZGIuvQ9cWdXh", "Domain"),
         "Local States Vertical Live Links (app08yUTcPhJVPxCI)": ("app08yUTcPhJVPxCI", "Sheet1", "Domain"),
         "Sports Vertical Bookies.com and Rotowire (appDFsy6RWw5TRNH6)": ("appDFsy6RWw5TRNH6", "tbl8whN06WyCOo5uk", "Domain"),
+        "BonusFinder-DataBase (appZEyAoVubSrBl9w)": ("appZEyAoVubSrBl9w", "tbl4pzZFkzfKLhtkK", "Domain"),
+        "Prospect-Data-Freebets (appzbw2BJVm5QXCAa)": ("appzbw2BJVm5QXCAa", "tbliCOQZY9RICLsLP", "Domain"),
+        "Prospect-Data-BonusFinder (app7LTnZSYutwKzsx)": ("app7LTnZSYutwKzsx", "tbliCOQZY9RICLsLP", "Domain"),
+        "Prospect-Data-Rotowire (appwEdvjcFpq4qiHj)": ("appwEdvjcFpq4qiHj", "tbliCOQZY9RICLsLP", "Domain"),
+        "Prospect-Data-Bookies (appZfavfEMOpPbqiP)": ("appZfavfEMOpPbqiP", "tbliCOQZY9RICLsLP", "Domain"),
+        "Prospect-Data-WhichBingo (appphIl2Iq8kloRGD)": ("appphIl2Iq8kloRGD", "tbliCOQZY9RICLsLP", "Domain"),
+        "Prospect-Data-Casinos (appO5ta4j5rUaG9XL)": ("appO5ta4j5rUaG9XL", "tbliCOQZY9RICLsLP", "Domain"),
+        "Prospect-Data-States-Sites (appzVpYiLO90EgRgj)": ("appzVpYiLO90EgRgj", "tbliCOQZY9RICLsLP", "Domain"),
     }
 
     st.sidebar.markdown("**Existing domains — select Airtable sources to check & EXCLUDE**")
@@ -310,10 +318,13 @@ if use_airtable:
 
     st.sidebar.markdown("---")
     enable_rejected = st.sidebar.checkbox("Exclude 'Outreach-Rejected-Sites' (appTf6MmZDgouu8SN)", value=True)
-    enable_blocklist = st.sidebar.checkbox("Exclude 'GDC-Disavow-List' (appJTJQwjHRaAyLkw)", value=True)
+    enable_blocklist = st.sidebar.checkbox("Exclude GDC-Disavow-Lists (appJTJQwjHRaAyLkw + appEEpV8mgLcBMQLE)", value=True)
 
     rejected_cfg = [("appTf6MmZDgouu8SN", "tbliCOQZY9RICLsLP", "Domain")] if enable_rejected else []
-    blocklist_cfg = [("appJTJQwjHRaAyLkw", "tbliCOQZY9RICLsLP", "Domain")] if enable_blocklist else []
+    blocklist_cfg = [
+        ("appJTJQwjHRaAyLkw", "tbliCOQZY9RICLsLP", "Domain"),
+        ("appEEpV8mgLcBMQLE", "tbliCOQZY9RICLsLP", "Domain"),
+    ] if enable_blocklist else []
 
     # Speed mode for Airtable lookups
     fast_match = st.sidebar.checkbox(
